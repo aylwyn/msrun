@@ -83,12 +83,12 @@ def usage():
 	Ne_pop_history: 'time,pop,Ne ...'
 	merge_history: 'time,from_pop,to_pop ...'
 	migration_history: 'time,to_pop,from_pop,to_pop_mig_frac ...'
-	OPTIONS: [-P pipe_cmds] [--prefix=prefix] [--run] [--suffix=suffix] [--sim]
+	OPTIONS: [-P pipe_cmds] [--prefix=prefix] [--run] [--suffix=suffix] [--sim] [--outf | --bsub]
 	''')
 	sys.exit(2)
 
 try:
-	opts, args = getopt.gnu_getopt(sys.argv[1:], 'n:u:r:l:P:ap:N:vg:h:s:', ['trees', 'mrca', 'run', 'eN=', 'en=', 'ej=', 'em=', 'sim', 'debug', 'outf', 'prefix=', 'suffix=', 'mst=', 'msr='])
+	opts, args = getopt.gnu_getopt(sys.argv[1:], 'n:u:r:l:P:ap:N:vg:h:s:', ['trees', 'mrca', 'run', 'eN=', 'en=', 'ej=', 'em=', 'sim', 'debug', 'outf', 'bsub', 'prefix=', 'suffix=', 'mst=', 'msr='])
 except getopt.GetoptError:
 	usage()
 	sys.exit(2)
@@ -167,6 +167,8 @@ for (oflag, oarg) in opts:
 		run = True
 	elif oflag == '--outf':
 		outfile = True
+	elif oflag == '--bsub':
+		bsubout = True
 
 logging.basicConfig(format = '%(module)s:%(lineno)d:%(levelname)s: %(message)s', level = loglevel)
 
@@ -189,7 +191,9 @@ cmd = ' '.join(['ms', msargs])
 if pipecmds:
 	cmd += ' | ' + pipecmds
 
-if outfile:
+if bsubout:
+	cmd = 'bsub.py \'' + cmd + '\' -M 2 -o %s' % outname
+elif outfile:
 	cmd += ' > ' + outname
 #redirect = '>'
 #if pipecmds:
