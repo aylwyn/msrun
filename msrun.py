@@ -27,6 +27,7 @@ suf = ''
 pipecmds = ''
 pref = 'mssim'
 outfile = False
+bsubout = False
 
 os.umask(0002)
 encmd = []
