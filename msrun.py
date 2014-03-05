@@ -28,6 +28,8 @@ pipecmds = ''
 pref = 'mssim'
 outfile = False
 bsubout = False
+unscale = False
+simname = ''
 
 os.umask(0002)
 encmd = []
@@ -35,11 +37,12 @@ N0 = 1e4
 tgen = 30.0
 nsamps = 4
 nreps = 1
-mst = 4.8
-msr = 4.0
+#mst = 4.8 #(equiv to default seqlen of 9600)
+#msr = 4.0
 seqlen = 10e3
 mugen = 1.25e-8
 
+mst = mugen * 4 * N0 * seqlen
 
 def fnum(num, sf = 3): # round to 3sf and format compactly
 	s = []
@@ -74,6 +77,7 @@ def fnum(num, sf = 3): # round to 3sf and format compactly
 def usage():
 	print('usage: %s [msargs] OPTIONS' % (os.path.basename(sys.argv[0])))
 	print('usage: %s [-s nsamps] [-n nreps] [-p npops] [-N N0] [-l seqlen] [-u mu_gen [-r rho_gen] | --ms_theta=ms_theta [--ms_rho=ms_rho]] [-g tgen] [--eN=Ne_all_history] [--en=Ne_pop_history] [--ej=merge_history] [--em=migration_history] [--trees] [--mrca] OPTIONS' % (os.path.basename(sys.argv[0])))
+	print('usage: %s --unscale MSCMD [-l seqlen] [-u mu_gen] [-g tgen]' % (os.path.basename(sys.argv[0])))
 	print('''
 	msargs: 'nsamps nreps -t mst [-r msr seqlen] [-I npops pop1_nsamps [pop2_nsamps ...]] <MSOPTIONS>'
 		(see msdoc for more options)
@@ -89,7 +93,7 @@ def usage():
 	sys.exit(2)
 
 try:
-	opts, args = getopt.gnu_getopt(sys.argv[1:], 'n:u:r:l:P:ap:N:vg:h:s:', ['trees', 'mrca', 'run', 'eN=', 'en=', 'ej=', 'em=', 'sim', 'debug', 'outf', 'bsub', 'prefix=', 'suffix=', 'mst=', 'msr='])
+	opts, args = getopt.gnu_getopt(sys.argv[1:], 'n:u:r:l:P:ap:N:vg:h:s:', ['trees', 'mrca', 'run', 'eN=', 'en=', 'ej=', 'em=', 'sim', 'debug', 'outf', 'bsub', 'prefix=', 'suffix=', 'mst=', 'msr=', 'unscale'])
 except getopt.GetoptError:
 	usage()
 	sys.exit(2)
@@ -170,13 +174,62 @@ for (oflag, oarg) in opts:
 		outfile = True
 	elif oflag == '--bsub':
 		bsubout = True
+	elif oflag == '--unscale':
+		unscale = True
 
 logging.basicConfig(format = '%(module)s:%(lineno)d:%(levelname)s: %(message)s', level = loglevel)
 
 if len(args) >= 1:
-	cargs = args[0]
+	if unscale:
+		simname = args[0]
+	else:
+		cargs = args[0]
 else:
 	cargs = '%d %d -t %s' % (nsamps, nreps, fnum(mst))
+
+if unscale:
+	print('Using mugen = %e per bp per generation, tgen = %.1f y' % (mugen, tgen))
+	msargs = {}
+#	for tok in (x.split('_') for x in simname.split('-')[1:]):
+	for x in simname.split('-')[1:]:
+		argl = x.split('_')[0]
+		if argl in msargs:
+			msargs[argl].append(x)
+		else:
+			msargs[argl] = [x]
+#	print(msargs)
+	if 'r' in msargs:
+		seqlen = int(msargs['r'][0].split('_')[2])
+	print('seqlen = %d bp' % (seqlen))
+	if 't' in msargs:
+		mst = float(msargs['t'][0].split('_')[1])
+		N0 = mst / (4 * mugen * seqlen)
+		print('N0 = %d' % N0)
+	if 'r' in msargs:
+		rho = float(msargs['r'][0].split('_')[1]) / (4 * N0 * seqlen)
+		print('rec rate = %e per bp per generation' % rho)
+	if 'I' in msargs:
+		popn = msargs['I'][0].split('_')
+		print('%s populations; numbers of samples: %s' % (popn[1], ', '.join(popn[2:])))
+	if 'en' in msargs:
+		for arg in msargs['en']:
+			tj = float(arg.split('_')[1]) * N0 * tgen
+			pop = arg.split('_')[2]
+			siz = float(arg.split('_')[3]) * N0
+			print('At %d yrs: population %s size %d' % (tj, pop, siz))
+	if 'ej' in msargs:
+		for arg in msargs['ej']:
+			tj = float(arg.split('_')[1]) * N0 * tgen
+			pop = arg.split('_')[2:]
+			print('At %d yrs: population %s joins population %s' % (tj, pop[0], pop[1]))
+	if 'em' in msargs:
+		for arg in msargs['em']:
+			tj = float(arg.split('_')[1]) * N0 * tgen
+			pop = arg.split('_')[2:4]
+			mig = float(arg.split('_')[4]) / (4 * N0)
+			print('At %d yrs: migration fraction of population %s from population %s set to %e' % (tj, pop[0], pop[1], mig))
+	sys.exit(0)
+
 
 msargs = ' '.join([cargs, ' '.join(encmd)])
 
