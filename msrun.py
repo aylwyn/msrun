@@ -21,11 +21,11 @@ from bputil import *
 loglevel = logging.WARNING
 
 sim = 0
-allargs = False
+allargs = True
 run = False
-suf = ''
+pref = ''
 pipecmds = ''
-pref = 'mssim'
+suf = 'mssim'
 outfile = False
 bsubout = False
 unscale = False
@@ -37,8 +37,6 @@ N0 = 1e4
 tgen = 30.0
 nsamps = 4
 nreps = 1
-#mst = 4.8 #(equiv to default seqlen of 9600)
-#msr = 4.0
 seqlen = 10e3
 mugen = 1.25e-8
 
@@ -188,10 +186,16 @@ else:
 	cargs = '%d %d -t %s' % (nsamps, nreps, fnum(mst))
 
 if unscale:
-	print('Using mugen = %e per bp per generation, tgen = %.1f y' % (mugen, tgen))
+	print('Using mugen = %e per bp per generation, tgen = %.1f y:' % (mugen, tgen))
 	msargs = {}
 #	for tok in (x.split('_') for x in simname.split('-')[1:]):
-	for x in simname.split('-')[1:]:
+	for i, x in enumerate(simname.replace('.mssim', '').split('-')):
+		if i == 0 and x.isdigit():
+			print('%s samples' % x)
+			continue
+		if i == 1 and x.isdigit():
+			print('%s reps' % x)
+			continue
 		argl = x.split('_')[0]
 		if argl in msargs:
 			msargs[argl].append(x)
