@@ -194,7 +194,7 @@ if unscale:
 			print('%s samples' % x)
 			continue
 		if i == 1 and x.isdigit():
-			print('%s reps' % x)
+			print('%s reps; each with:' % x)
 			continue
 		argl = x.split('_')[0]
 		if argl in msargs:
@@ -204,34 +204,36 @@ if unscale:
 #	print(msargs)
 	if 'r' in msargs:
 		seqlen = int(msargs['r'][0].split('_')[2])
-	print('seqlen = %d bp' % (seqlen))
+#	print('\tseqlen = %d kbp' % (seqlen/1e3))
+	print('\tseqlen = %s bp' % "{:,}".format(seqlen))
 	if 't' in msargs:
 		mst = float(msargs['t'][0].split('_')[1])
 		N0 = mst / (4 * mugen * seqlen)
-		print('N0 = %d' % N0)
+#		print('\tN0 = %d' % N0)
+		print('\tN0 = %s' % "{:,}".format(int(N0)))
 	if 'r' in msargs:
 		rho = float(msargs['r'][0].split('_')[1]) / (4 * N0 * seqlen)
-		print('rec rate = %e per bp per generation' % rho)
+		print('\trec rate = %e per bp per generation' % rho)
 	if 'I' in msargs:
 		popn = msargs['I'][0].split('_')
-		print('%s populations; numbers of samples: %s' % (popn[1], ', '.join(popn[2:])))
+		print('\t%s populations; numbers of samples: %s' % (popn[1], ', '.join(popn[2:])))
 	if 'en' in msargs:
 		for arg in msargs['en']:
 			tj = float(arg.split('_')[1]) * N0 * tgen
 			pop = arg.split('_')[2]
 			siz = float(arg.split('_')[3]) * N0
-			print('At %d yrs: population %s size %d' % (tj, pop, siz))
+			print('\tAt %d yrs: population %s size %d' % (tj, pop, siz))
 	if 'ej' in msargs:
 		for arg in msargs['ej']:
 			tj = float(arg.split('_')[1]) * N0 * tgen
 			pop = arg.split('_')[2:]
-			print('At %d yrs: population %s joins population %s' % (tj, pop[0], pop[1]))
+			print('\tAt %d yrs: population %s joins population %s' % (tj, pop[0], pop[1]))
 	if 'em' in msargs:
 		for arg in msargs['em']:
 			tj = float(arg.split('_')[1]) * N0 * tgen
 			pop = arg.split('_')[2:4]
 			mig = float(arg.split('_')[4]) / (4 * N0)
-			print('At %d yrs: migration fraction of population %s from population %s set to %e' % (tj, pop[0], pop[1], mig))
+			print('\tAt %d yrs: migration fraction of population %s from population %s set to %e' % (tj, pop[0], pop[1], mig))
 	sys.exit(0)
 
 
