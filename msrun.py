@@ -14,33 +14,12 @@ from logging import error, warning, info, debug, critical
 import locale
 import string
 import decimal
+import argparse
 
-from bputil import *
+from aosutils import *
 
 # global defaults
 loglevel = logging.WARNING
-
-sim = 0
-allargs = True
-run = False
-pref = ''
-pipecmds = ''
-suf = 'mssim'
-outfile = False
-bsubout = False
-unscale = False
-simname = ''
-
-os.umask(0002)
-encmd = []
-N0 = 1e4
-tgen = 30.0
-nsamps = 4
-nreps = 1
-seqlen = 10e3
-mugen = 1.25e-8
-
-mst = mugen * 4 * N0 * seqlen
 
 def fnum(num, sf = 3): # round to 3sf and format compactly
 	s = []
@@ -72,124 +51,107 @@ def fnum(num, sf = 3): # round to 3sf and format compactly
 		return(''.join(s))
 
 
-def usage():
-	print('usage: %s [msargs] OPTIONS' % (os.path.basename(sys.argv[0])))
-	print('usage: %s [-s nsamps] [-n nreps] [-p npops] [-N N0] [-l seqlen] [-u mu_gen [-r rho_gen] | --ms_theta=ms_theta [--ms_rho=ms_rho]] [-g tgen] [--eN=Ne_all_history] [--en=Ne_pop_history] [--ej=merge_history] [--em=migration_history] [--trees] [--mrca] OPTIONS' % (os.path.basename(sys.argv[0])))
-	print('usage: %s --unscale MSCMD [-l seqlen] [-u mu_gen] [-g tgen]' % (os.path.basename(sys.argv[0])))
-	print('''
-	msargs: 'nsamps nreps -t mst [-r msr seqlen] [-I npops pop1_nsamps [pop2_nsamps ...]] <MSOPTIONS>'
-		(see msdoc for more options)
-	ms scaling:
-		ms_theta = 4 * mu_gen * N0 * seqlen (e.g. = 4.8e-4 * seqlen for human)
-		ms_rho = 4 * rec_gen * N0 * seqlen (e.g. = 4e-4 * seqlen for human)
-	Ne_all_history: 'time,Ne ...'
-	Ne_pop_history: 'time,pop,Ne ...'
-	merge_history: 'time,from_pop,to_pop ...'
-	migration_history: 'time,to_pop,from_pop,to_pop_mig_frac ...'
-	OPTIONS: [-P pipe_cmds] [--prefix=prefix] [--run] [--suffix=suffix] [--sim] [--outf | --bsub]
-	''')
-	sys.exit(2)
+#def usage():
+#	print('usage: %s [msargs] OPTIONS' % (os.path.basename(sys.argv[0])))
+#	print('usage: %s [-s nsamps] [-n nreps] [-p npops] [-N N0] [-l seqlen] [-u mu_gen [-r rho_gen] | --ms_theta=ms_theta [--ms_rho=ms_rho]] [-g tgen] [--eN=Ne_all_history] [--en=Ne_pop_history] [--ej=merge_history] [--em=migration_history] [--trees] [--mrca] OPTIONS' % (os.path.basename(sys.argv[0])))
+#	print('usage: %s --unscale MSCMD [-l seqlen] [-u mu_gen] [-g tgen]' % (os.path.basename(sys.argv[0])))
+#	print('''
+#	msargs: 'nsamps nreps -t mst [-r msr seqlen] [-I npops pop1_nsamps [pop2_nsamps ...]] <MSOPTIONS>'
+#		(see msdoc for more options)
+#	ms scaling:
+#		ms_theta = 4 * mu_gen * N0 * seqlen (e.g. = 4.8e-4 * seqlen for human)
+#		ms_rho = 4 * rec_gen * N0 * seqlen (e.g. = 4e-4 * seqlen for human)
+#	Ne_all_history: 'time,Ne ...'
+#	Ne_pop_history: 'time,pop,Ne ...'
+#	merge_history: 'time,from_pop,to_pop ...'
+#	migration_history: 'time,to_pop,from_pop,to_pop_mig_frac ...'
+#	''')
 
-try:
-	opts, args = getopt.gnu_getopt(sys.argv[1:], 'n:u:r:l:P:ap:N:vg:h:s:', ['trees', 'mrca', 'run', 'eN=', 'en=', 'ej=', 'em=', 'sim', 'debug', 'outf', 'bsub', 'prefix=', 'suffix=', 'mst=', 'msr=', 'unscale'])
-except getopt.GetoptError:
-	usage()
-	sys.exit(2)
-for (oflag, oarg) in opts:
-	if oflag == '--sim':
-		sim = 2
-	if oflag == '--simv':
-		sim = 1
-		loglevel = logging.INFO
-	elif oflag == '-a':
-		allargs = True
-	elif oflag == '--suffix':
-		suf = oarg
-	elif oflag == '-P':
-		pipecmds = oarg
-	elif oflag == '--prefix':
-		pref = oarg
-	elif oflag == '-s':
-		nsamps = int(eval(oarg))
-	elif oflag == '-p':
-		npops = int(eval(oarg))
-		popsize = nsamps/npops
-		if not popsize * npops == nsamps:
-			error('only equal pop sizes supported; nsamps %d not a multiple of npops %d' % (nsamps, npops))
-		encmd.append('-I %d %s' % (npops, ' '.join([str(popsize)] * npops)))
-	elif oflag == '-n':
-		nreps = int(eval(oarg))
-	elif oflag == '-N':
-		N0 = int(eval(oarg))
-	elif oflag == '-l':
-		seqlen = int(eval(oarg))
-	elif oflag == '-u':
-		mst = float(eval(oarg)) * 4 * N0 * seqlen
-	elif oflag == '-r':
-		msr = float(eval(oarg)) * 4 * N0 * seqlen
-		encmd.append('-r %s %d' % (fnum(msr), seqlen))
-	elif oflag == '-g':
-		tgen = float(oarg)
-	elif oflag == '--trees':
-		encmd.append('-T')
-	elif oflag == '--mrca':
-		encmd.append('-L')
-	elif oflag == '--mst':
-		mst = float(oarg)
-	elif oflag == '--msr':
-		msr = float(oarg)
-		encmd.append('-r %s %d' % (fnum(msr), seqlen))
-	elif oflag == '--eN':
-		for x in oarg.split():
-#			print(x)
-			tev = eval(x.split(',')[0]) / (4 * N0 * tgen)
-			Nev = float(eval(x.split(',')[1])) / N0
-			encmd.append('-eN %s %s' % (fnum(tev), fnum(Nev)))
-	elif oflag == '--en':
-		for x in oarg.split():
-			tev = eval(x.split(',')[0]) / (4 * N0 * tgen)
-			pnum = int(x.split(',')[1])
-			Nev = float(eval(x.split(',')[2])) / N0
-			encmd.append('-en %s %d %s' % (fnum(tev), pnum, fnum(Nev)))
-	elif oflag == '--ej':
-		for x in oarg.split():
-			tev = eval(x.split(',')[0]) / (4 * N0 * tgen)
-			p1, p2 = x.split(',')[1:]
-			encmd.append('-ej %s %s %s' % (fnum(tev), p1, p2))
-	elif oflag == '--em':
-		for x in oarg.split():
-			tev = eval(x.split(',')[0]) / (4 * N0 * tgen)
-			p1, p2 = x.split(',')[1:3]
-			mig = eval(x.split(',')[3]) * 4 * N0
-			encmd.append('-em %s %s %s %s' % (fnum(tev), p1, p2, fnum(mig)))
-	elif oflag == '-v':
-		loglevel = logging.INFO
-	elif oflag == '--debug':
-		loglevel = logging.DEBUG
-	elif oflag == '--run':
-		run = True
-	elif oflag == '--outf':
-		outfile = True
-	elif oflag == '--bsub':
-		bsubout = True
-	elif oflag == '--unscale':
-		unscale = True
+os.umask(0002)
 
+p = argparse.ArgumentParser()
+p.addargument('MSARGS', nargs = '?', help = 'ms arguments: "nsamps nreps -t mst [-r msr seqlen] [-I npops pop1_nsamps [pop2_nsamps ...]] <ms_options>" (see msdoc for more options)')
+p.addargument('-n', '--nreps', type = int, default = 1, 'number of repetitions')
+p.addargument('-u', '--mugen', type = float, default = 1.25e-8, 'per-generation mutation rate')
+p.addargument('-r', '--recgen', type = float, default = 0.0, 'per-generation recombination rate'))
+p.addargument('-l', '--seqlen', type = int, default = 10e3, 'sequence length simulated'))
+p.addargument('-P', '--pipecmds', default = '', help = 'pipe commands')
+p.addargument('-a', '--allargs', action='store_true', default = False, help = 'encode all arguments in output name')
+p.addargument('-p', '--npops', type = int, default = 0, 'number of populations'))
+p.addargument('-N', '--N0', type = int, default = 1e4, 'base effective population size')
+p.addargument('-g', '--tgen', type = float, default = 30.0, 'generation time (y)'))
+p.addargument('-s', '--nsamps', type = int, default = 4, 'number of samples per rep')
+p.addargument('--trees', action='store_true', default = False, help = 'inlude trees in ms output')
+p.addargument('--mrca', action='store_true', default = False, help = 'inlude TMRCA in ms output')
+p.addargument('--run', action='store_true', default = False, help = 'run ms command')
+p.addargument('--eN', default='', help='global Ne history: "time,Ne ..."' )
+p.addargument('--en', default='', help='population Ne history: "time,pop,Ne ..."' )
+p.addargument('--ej', default='', help='population merge_history: "time,from_pop,to_pop ..."')
+p.addargument('--em', default='', help='migration_history: "time,to_pop,from_pop,to_pop_mig_frac ..."')
+p.addargument('--outfile', action='store_true', default = False, help = 'redirect output to OUTFILE')
+p.addargument('--bsub', action='store_true', default = False, help = 'output bsub.py command')
+p.addargument('--prefix', default='', help='output prefix')
+p.addargument('--suffix', default='mssim', help='output suffix')
+p.addargument('--mst', type = float, default = 0.0, 'ms theta value; otherwise ms_theta = 4 * MUGEN * N0 * SEQLEN (e.g. = 4.8e-4 * SEQLEN for human)')
+p.addargument('--msr', type = float, default = 0.0, 'ms rho value; otherwise ms_rho = 4 * RECGEN * N0 * SEQLEN (e.g. = 4.0e-4 * SEQLEN for human)')
+p.addargument('--unscale_string', default='', help='print unscaled parameters for simulation output name UNSCALE_STRING')
+p.add_argument('--sim', action='store_true', default = False, help = 'dry run')
+p.add_argument('-v', '--verbose', action='store_true', default = False)#, help = 'dry run')
+p.add_argument('--debug', action='store_true', default = False, help=argparse.SUPPRESS)
+pp.add_argument('--bsim', action='store_true', default = False, help=argparse.SUPPRESS)
+#pp.add_argument('--replace', action='store_true', default = False, help = 'replace existing files')
+
+args = p.parse_args()
+
+loglevel = logging.WARNING
+if args.verbose:
+	loglevel = logging.INFO
+if args.debug:
+	loglevel = logging.DEBUG
 logging.basicConfig(format = '%(module)s:%(lineno)d:%(levelname)s: %(message)s', level = loglevel)
 
-if len(args) >= 1:
-	if unscale:
-		simname = args[0]
-	else:
-		cargs = args[0]
-else:
-	cargs = '%d %d -t %s' % (nsamps, nreps, fnum(mst))
+encmd = []
+if args.mst > 0.0:
+	args.mst = args.mugen * 4 * args.N0 * args.seqlen
+if args.msr > 0.0:
+	encmd.append('-r %s %d' % (fnum(args.msr), seqlen))
+if args.npops:
+	popsize = args.nsamps/args.npops
+	if not popsize * args.npops == args.nsamps:
+		error('only equal pop sizes supported; nsamps %d not a multiple of npops %d' % (args.nsamps, args.npops))
+	encmd.append('-I %d %s' % (args.npops, ' '.join([str(popsize)] * args.npops)))
+if args.recgen > 0.0:
+	args.msr = args.recgen * 4 * args.N0 * seqlen
+	encmd.append('-r %s %d' % (fnum(args.msr), seqlen))
+if args.trees:
+	encmd.append('-T')
+if args.mrca:
+	encmd.append('-L')
+for x in args.eN.split():
+#	print(x)
+	tev = eval(x.split(',')[0]) / (4 * args.N0 * args.tgen)
+	Nev = float(eval(x.split(',')[1])) / args.N0
+	encmd.append('-eN %s %s' % (fnum(tev), fnum(Nev)))
+for x in args.en.split():
+	tev = eval(x.split(',')[0]) / (4 * args.N0 * args.tgen)
+	pnum = int(x.split(',')[1])
+	Nev = float(eval(x.split(',')[2])) / args.N0
+	encmd.append('-en %s %d %s' % (fnum(tev), pnum, fnum(Nev)))
+for x in args.ej.split():
+	tev = eval(x.split(',')[0]) / (4 * args.N0 * args.tgen)
+	p1, p2 = x.split(',')[1:]
+	encmd.append('-ej %s %s %s' % (fnum(tev), p1, p2))
+for x in args.em.split():
+	tev = eval(x.split(',')[0]) / (4 * args.N0 * args.tgen)
+	p1, p2 = x.split(',')[1:3]
+	mig = eval(x.split(',')[3]) * 4 * args.N0
+	encmd.append('-em %s %s %s %s' % (fnum(tev), p1, p2, fnum(mig)))
 
-if unscale:
-	print('Using mugen = %e per bp per generation, tgen = %.1f y:' % (mugen, tgen))
+if args.unscale_string:
+	print('Using mugen = %e per bp per generation, tgen = %.1f y:' % (args.mugen, args.tgen))
 	msargs = {}
 #	for tok in (x.split('_') for x in simname.split('-')[1:]):
-	for i, x in enumerate(simname.replace('.mssim', '').split('-')):
+	for i, x in enumerate(args.unscale_string.replace('.mssim', '').split('-')):
 		if i == 0 and x.isdigit():
 			print('%s samples' % x)
 			continue
@@ -207,53 +169,56 @@ if unscale:
 #	print('\tseqlen = %d kbp' % (seqlen/1e3))
 	print('\tseqlen = %s bp' % "{:,}".format(seqlen))
 	if 't' in msargs:
-		mst = float(msargs['t'][0].split('_')[1])
-		N0 = mst / (4 * mugen * seqlen)
+		args.mst = float(msargs['t'][0].split('_')[1])
+		args.N0 = args.mst / (4 * args.mugen * seqlen)
 #		print('\tN0 = %d' % N0)
-		print('\tN0 = %s' % "{:,}".format(int(N0)))
+		print('\tN0 = %s' % "{:,}".format(int(args.N0)))
 	if 'r' in msargs:
-		rho = float(msargs['r'][0].split('_')[1]) / (4 * N0 * seqlen)
+		rho = float(msargs['r'][0].split('_')[1]) / (4 * args.N0 * seqlen)
 		print('\trec rate = %e per bp per generation' % rho)
 	if 'I' in msargs:
 		popn = msargs['I'][0].split('_')
 		print('\t%s populations; numbers of samples: %s' % (popn[1], ', '.join(popn[2:])))
 	if 'en' in msargs:
 		for arg in msargs['en']:
-			tj = float(arg.split('_')[1]) * N0 * tgen
+			tj = float(arg.split('_')[1]) * args.N0 * args.tgen
 			pop = arg.split('_')[2]
-			siz = float(arg.split('_')[3]) * N0
+			siz = float(arg.split('_')[3]) * args.N0
 			print('\tAt %d yrs: population %s size %d' % (tj, pop, siz))
 	if 'ej' in msargs:
 		for arg in msargs['ej']:
-			tj = float(arg.split('_')[1]) * N0 * tgen
+			tj = float(arg.split('_')[1]) * args.N0 * args.tgen
 			pop = arg.split('_')[2:]
 			print('\tAt %d yrs: population %s joins population %s' % (tj, pop[0], pop[1]))
 	if 'em' in msargs:
 		for arg in msargs['em']:
-			tj = float(arg.split('_')[1]) * N0 * tgen
+			tj = float(arg.split('_')[1]) * args.N0 * args.tgen
 			pop = arg.split('_')[2:4]
-			mig = float(arg.split('_')[4]) / (4 * N0)
+			mig = float(arg.split('_')[4]) / (4 * args.N0)
 			print('\tAt %d yrs: migration fraction of population %s from population %s set to %e' % (tj, pop[0], pop[1], mig))
 	sys.exit(0)
 
 
-msargs = ' '.join([cargs, ' '.join(encmd)])
+if not args.msargs:
+	args.msargs = '%d %d -t %s' % (args.nsamps, nreps, fnum(args.mst))
 
-if allargs:
-	outname = '_'.join([pref] + msargs.split()).replace('_-', '-')
+msargs = ' '.join([args.msargs, ' '.join(encmd)])
+
+if args.allargs:
+	outname = '_'.join([args.pref] + msargs.split()).replace('_-', '-')
 else:
-	outname = '_'.join([pref] + msargs.split()[2:]).replace('_-', '-')
-if suf:
-	outname += '.' + suf
+	outname = '_'.join([args.pref] + msargs.split()[2:]).replace('_-', '-')
+if args.suffix:
+	outname += '.' + args.suffix
 
 cmd = ' '.join(['ms', msargs])
 
-if pipecmds:
-	cmd += ' | ' + pipecmds
+if args.pipecmds:
+	cmd += ' | ' + args.pipecmds
 
-if bsubout:
+if args.bsub:
 	cmd = 'bsub.py \'' + cmd + '\' -M 2 -o %s' % outname
-elif outfile:
+elif args.outfile:
 	cmd += ' > ' + outname
 #redirect = '>'
 #if pipecmds:
@@ -262,10 +227,10 @@ elif outfile:
 #cmd = ' '.join(['ms', msargs, redirect, outname])
 #print('ms %s %s %s' % (msargs, redirect, outname))
 
-if run:
+if args.run:
 #	info('args \'%s\'' % (' '.join(sys.argv[1:])))
 	info('running \'%s\'' % (cmd))
-	subcall(cmd, sim, wait = True)
+	subcall(cmd, args.sim, wait = True)
 else:
 	print(cmd)
 
