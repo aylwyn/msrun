@@ -18,9 +18,6 @@ import argparse
 
 from aosutils import *
 
-# global defaults
-loglevel = logging.WARNING
-
 def fnum(num, sf = 3): # round to 3sf and format compactly
 	s = []
 	nf = 0
@@ -50,55 +47,38 @@ def fnum(num, sf = 3): # round to 3sf and format compactly
 	else:
 		return(''.join(s))
 
-
-#def usage():
-#	print('usage: %s [msargs] OPTIONS' % (os.path.basename(sys.argv[0])))
-#	print('usage: %s [-s nsamps] [-n nreps] [-p npops] [-N N0] [-l seqlen] [-u mu_gen [-r rho_gen] | --ms_theta=ms_theta [--ms_rho=ms_rho]] [-g tgen] [--eN=Ne_all_history] [--en=Ne_pop_history] [--ej=merge_history] [--em=migration_history] [--trees] [--mrca] OPTIONS' % (os.path.basename(sys.argv[0])))
-#	print('usage: %s --unscale MSCMD [-l seqlen] [-u mu_gen] [-g tgen]' % (os.path.basename(sys.argv[0])))
-#	print('''
-#	msargs: 'nsamps nreps -t mst [-r msr seqlen] [-I npops pop1_nsamps [pop2_nsamps ...]] <MSOPTIONS>'
-#		(see msdoc for more options)
-#	ms scaling:
-#		ms_theta = 4 * mu_gen * N0 * seqlen (e.g. = 4.8e-4 * seqlen for human)
-#		ms_rho = 4 * rec_gen * N0 * seqlen (e.g. = 4e-4 * seqlen for human)
-#	Ne_all_history: 'time,Ne ...'
-#	Ne_pop_history: 'time,pop,Ne ...'
-#	merge_history: 'time,from_pop,to_pop ...'
-#	migration_history: 'time,to_pop,from_pop,to_pop_mig_frac ...'
-#	''')
-
 os.umask(0002)
 
-p = argparse.ArgumentParser()
-p.addargument('MSARGS', nargs = '?', help = 'ms arguments: "nsamps nreps -t mst [-r msr seqlen] [-I npops pop1_nsamps [pop2_nsamps ...]] <ms_options>" (see msdoc for more options)')
-p.addargument('-n', '--nreps', type = int, default = 1, 'number of repetitions')
-p.addargument('-u', '--mugen', type = float, default = 1.25e-8, 'per-generation mutation rate')
-p.addargument('-r', '--recgen', type = float, default = 0.0, 'per-generation recombination rate'))
-p.addargument('-l', '--seqlen', type = int, default = 10e3, 'sequence length simulated'))
-p.addargument('-P', '--pipecmds', default = '', help = 'pipe commands')
-p.addargument('-a', '--allargs', action='store_true', default = False, help = 'encode all arguments in output name')
-p.addargument('-p', '--npops', type = int, default = 0, 'number of populations'))
-p.addargument('-N', '--N0', type = int, default = 1e4, 'base effective population size')
-p.addargument('-g', '--tgen', type = float, default = 30.0, 'generation time (y)'))
-p.addargument('-s', '--nsamps', type = int, default = 4, 'number of samples per rep')
-p.addargument('--trees', action='store_true', default = False, help = 'inlude trees in ms output')
-p.addargument('--mrca', action='store_true', default = False, help = 'inlude TMRCA in ms output')
-p.addargument('--run', action='store_true', default = False, help = 'run ms command')
-p.addargument('--eN', default='', help='global Ne history: "time,Ne ..."' )
-p.addargument('--en', default='', help='population Ne history: "time,pop,Ne ..."' )
-p.addargument('--ej', default='', help='population merge_history: "time,from_pop,to_pop ..."')
-p.addargument('--em', default='', help='migration_history: "time,to_pop,from_pop,to_pop_mig_frac ..."')
-p.addargument('--outfile', action='store_true', default = False, help = 'redirect output to OUTFILE')
-p.addargument('--bsub', action='store_true', default = False, help = 'output bsub.py command')
-p.addargument('--prefix', default='', help='output prefix')
-p.addargument('--suffix', default='mssim', help='output suffix')
-p.addargument('--mst', type = float, default = 0.0, 'ms theta value; otherwise ms_theta = 4 * MUGEN * N0 * SEQLEN (e.g. = 4.8e-4 * SEQLEN for human)')
-p.addargument('--msr', type = float, default = 0.0, 'ms rho value; otherwise ms_rho = 4 * RECGEN * N0 * SEQLEN (e.g. = 4.0e-4 * SEQLEN for human)')
-p.addargument('--unscale_string', default='', help='print unscaled parameters for simulation output name UNSCALE_STRING')
+p = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+p.add_argument('MSARGS', nargs = '?', help = 'ms arguments: "nsamps nreps -t mst [-r msr seqlen] [-I npops pop1_nsamps [pop2_nsamps ...]] <ms_options>" (see msdoc for more options)')
+p.add_argument('-n', '--nreps', type = int, default = 1, help = 'number of repetitions')
+p.add_argument('-s', '--nsamps', type = int, default = 4, help = 'number of samples per rep')
+p.add_argument('-u', '--mugen', type = float, default = 1.25e-8, help = 'per-generation mutation rate')
+p.add_argument('-N', '--N0', type = int, default = 1e4, help = 'base effective population size')
+p.add_argument('-l', '--seqlen', type = int, default = 10e3, help = 'sequence length simulated')
+p.add_argument('-r', '--recgen', type = float, default = 0.0, help = 'per-generation recombination rate')
+p.add_argument('--mst', type = float, help = 'ms theta value; overrides --mugen if set, otherwise ms_theta = 4 * MUGEN * N0 * SEQLEN (e.g. = 4.8e-4 * SEQLEN for human)')
+p.add_argument('--msr', type = float, help = 'ms rho value; overrides --recgen if set, otherwise ms_rho = 4 * RECGEN * N0 * SEQLEN (e.g. = 4.0e-4 * SEQLEN for human)')
+p.add_argument('-p', '--npops', type = int, default = 1, help = 'number of populations')
+p.add_argument('-g', '--tgen', type = float, default = 30.0, help = 'generation time (y)')
+p.add_argument('--trees', action='store_true', default = False, help = 'inlude trees in ms output')
+p.add_argument('--mrca', action='store_true', default = False, help = 'inlude TMRCA in ms output')
+p.add_argument('--eN', help='global Ne history: "time,Ne ..."' )
+p.add_argument('--en', help='population Ne history: "time,pop,Ne ..."' )
+p.add_argument('--ej', help='population merge_history: "time,from_pop,to_pop ..."')
+p.add_argument('--em', help='migration_history: "time,to_pop,from_pop,to_pop_mig_frac ..."')
+p.add_argument('--outfile', action='store_true', default = False, help = 'redirect output to OUTFILE')
+p.add_argument('--prefix', help='output prefix')
+p.add_argument('--suffix', default='mssim', help='output suffix')
+p.add_argument('--unscale_string', help='print unscaled parameters for simulation output name UNSCALE_STRING')
+p.add_argument('--bsub', action='store_true', default = False, help = 'output bsub.py command')
+p.add_argument('-P', '--pipecmds', help = 'pipe commands')
+p.add_argument('-a', '--allargs', action='store_true', default = False, help = 'encode all arguments in output name')
+p.add_argument('--run', action='store_true', default = False, help = 'run ms command')
 p.add_argument('--sim', action='store_true', default = False, help = 'dry run')
 p.add_argument('-v', '--verbose', action='store_true', default = False)#, help = 'dry run')
 p.add_argument('--debug', action='store_true', default = False, help=argparse.SUPPRESS)
-pp.add_argument('--bsim', action='store_true', default = False, help=argparse.SUPPRESS)
+#p.add_argument('--bsim', action='store_true', default = False, help=argparse.SUPPRESS)
 #pp.add_argument('--replace', action='store_true', default = False, help = 'replace existing files')
 
 args = p.parse_args()
@@ -111,16 +91,16 @@ if args.debug:
 logging.basicConfig(format = '%(module)s:%(lineno)d:%(levelname)s: %(message)s', level = loglevel)
 
 encmd = []
-if args.mst > 0.0:
+if not args.mst > 0.0:
 	args.mst = args.mugen * 4 * args.N0 * args.seqlen
-if args.msr > 0.0:
-	encmd.append('-r %s %d' % (fnum(args.msr), seqlen))
-if args.npops:
+if args.npops > 1:
 	popsize = args.nsamps/args.npops
 	if not popsize * args.npops == args.nsamps:
 		error('only equal pop sizes supported; nsamps %d not a multiple of npops %d' % (args.nsamps, args.npops))
 	encmd.append('-I %d %s' % (args.npops, ' '.join([str(popsize)] * args.npops)))
-if args.recgen > 0.0:
+if args.msr > 0.0:
+	encmd.append('-r %s %d' % (fnum(args.msr), seqlen))
+elif args.recgen > 0.0:
 	args.msr = args.recgen * 4 * args.N0 * seqlen
 	encmd.append('-r %s %d' % (fnum(args.msr), seqlen))
 if args.trees:
@@ -199,15 +179,17 @@ if args.unscale_string:
 	sys.exit(0)
 
 
-if not args.msargs:
-	args.msargs = '%d %d -t %s' % (args.nsamps, nreps, fnum(args.mst))
+if not args.MSARGS:
+	args.MSARGS = '%d %d -t %s' % (args.nsamps, args.nreps, fnum(args.mst))
 
-msargs = ' '.join([args.msargs, ' '.join(encmd)])
+msargs = ' '.join([args.MSARGS, ' '.join(encmd)])
 
 if args.allargs:
-	outname = '_'.join([args.pref] + msargs.split()).replace('_-', '-')
+	outname = '_'.join(msargs.split()).replace('_-', '-')
 else:
-	outname = '_'.join([args.pref] + msargs.split()[2:]).replace('_-', '-')
+	outname = '_'.join(msargs.split()[2:]).replace('_-', '-')
+if args.prefix:
+	outname = args.prefix + '_' + outname
 if args.suffix:
 	outname += '.' + args.suffix
 
