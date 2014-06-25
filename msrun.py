@@ -61,7 +61,7 @@ p.add_argument('--mst', type = float, help = 'ms theta value; overrides --mugen 
 p.add_argument('--msr', type = float, help = 'ms rho value; overrides --recgen if set, otherwise ms_rho = 4 * RECGEN * N0 * SEQLEN (e.g. = 4.0e-4 * SEQLEN for human)')
 p.add_argument('-p', '--npops', type = int, default = 1, help = 'number of populations')
 p.add_argument('-g', '--tgen', type = float, default = 30.0, help = 'generation time (y)')
-p.add_argument('--trees', action='store_true', default = False, help = 'inlude trees in ms output')
+p.add_argument('-T', '--trees', action='store_true', default = False, help = 'inlude trees in ms output')
 p.add_argument('--mrca', action='store_true', default = False, help = 'inlude TMRCA in ms output')
 p.add_argument('--eN', help='global Ne history: "time,Ne ..."' )
 p.add_argument('--en', help='population Ne history: "time,pop,Ne ..."' )
@@ -107,25 +107,29 @@ if args.trees:
 	encmd.append('-T')
 if args.mrca:
 	encmd.append('-L')
-for x in args.eN.split():
-#	print(x)
-	tev = eval(x.split(',')[0]) / (4 * args.N0 * args.tgen)
-	Nev = float(eval(x.split(',')[1])) / args.N0
-	encmd.append('-eN %s %s' % (fnum(tev), fnum(Nev)))
-for x in args.en.split():
-	tev = eval(x.split(',')[0]) / (4 * args.N0 * args.tgen)
-	pnum = int(x.split(',')[1])
-	Nev = float(eval(x.split(',')[2])) / args.N0
-	encmd.append('-en %s %d %s' % (fnum(tev), pnum, fnum(Nev)))
-for x in args.ej.split():
-	tev = eval(x.split(',')[0]) / (4 * args.N0 * args.tgen)
-	p1, p2 = x.split(',')[1:]
-	encmd.append('-ej %s %s %s' % (fnum(tev), p1, p2))
-for x in args.em.split():
-	tev = eval(x.split(',')[0]) / (4 * args.N0 * args.tgen)
-	p1, p2 = x.split(',')[1:3]
-	mig = eval(x.split(',')[3]) * 4 * args.N0
-	encmd.append('-em %s %s %s %s' % (fnum(tev), p1, p2, fnum(mig)))
+if args.eN:
+	for x in args.eN.split():
+	#	print(x)
+		tev = eval(x.split(',')[0]) / (4 * args.N0 * args.tgen)
+		Nev = float(eval(x.split(',')[1])) / args.N0
+		encmd.append('-eN %s %s' % (fnum(tev), fnum(Nev)))
+if args.en:
+	for x in args.en.split():
+		tev = eval(x.split(',')[0]) / (4 * args.N0 * args.tgen)
+		pnum = int(x.split(',')[1])
+		Nev = float(eval(x.split(',')[2])) / args.N0
+		encmd.append('-en %s %d %s' % (fnum(tev), pnum, fnum(Nev)))
+if args.ej:
+	for x in args.ej.split():
+		tev = eval(x.split(',')[0]) / (4 * args.N0 * args.tgen)
+		p1, p2 = x.split(',')[1:]
+		encmd.append('-ej %s %s %s' % (fnum(tev), p1, p2))
+if args.em:
+	for x in args.em.split():
+		tev = eval(x.split(',')[0]) / (4 * args.N0 * args.tgen)
+		p1, p2 = x.split(',')[1:3]
+		mig = eval(x.split(',')[3]) * 4 * args.N0
+		encmd.append('-em %s %s %s %s' % (fnum(tev), p1, p2, fnum(mig)))
 
 if args.unscale_string:
 	print('Using mugen = %e per bp per generation, tgen = %.1f y:' % (args.mugen, args.tgen))
