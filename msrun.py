@@ -10,7 +10,7 @@ import os.path
 #from time import strftime
 import logging
 from logging import error, warning, info, debug, critical
-#import re
+import gzip
 import locale
 import string
 import decimal
@@ -18,44 +18,10 @@ import argparse
 
 from aosutils import *
 
-def fnum(num, sf = 3): # round to 3sf and format compactly
-	s = []
-	nf = 0
-	ppos = -1
-	for x in str(num):
-#		print((x, s))
-		if x == '.':
-			ppos = len(s)
-			continue
-		if nf == 0 and ppos < 0 and x == '0':
-			continue
-		s.append(x)
-		if x != '-':
-			nf += 1
-		if ppos >= 0 and nf > sf:
-			if int(s[-1]) >= 5:
-				s[-2] = str(int(s[-2]) + 1)
-			s = s[:-1]
-			break
-	if len(s) == 0:
-		s = ['0']
-	if ppos >= 0:
-		s.insert(ppos, '.')
-		if s[0] == '.':
-			s.insert(0, '0')
-		return(''.join(s).rstrip('0').rstrip('.'))
-	else:
-		return(''.join(s))
-
-#os.umask(0002)
-
 p = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-p.add_argument('MSARGS', nargs = '?', help = 'ms arguments: "nsamps nreps -t mst [-r msr seqlen] [-I npops pop1_nsamps [pop2_nsamps ...]] <ms_options>" (see msdoc for more options)')
 p.add_argument('-s', '--nsamps', type = int, default = 4, help = 'number of samples per rep')
 p.add_argument('-n', '--nreps', type = int, default = 1, help = 'number of repetitions')
-p.add_argument('--mst', type = float, help = 'ms theta value; overrides --mugen if set, otherwise ms_theta = 4 * MUGEN * N0 * SEQLEN (e.g. = 4.8e-4 * SEQLEN for human)')
-p.add_argument('--msr', type = float, help = 'ms rho value; overrides --recgen if set, otherwise ms_rho = 4 * RECGEN * N0 * SEQLEN (e.g. = 4.0e-4 * SEQLEN for human)')
-p.add_argument('-l', '--seqlen', type = int, default = 10e3, help = 'sequence length simulated')
+p.add_argument('-l', '--seqlen', type = int, default = 10000, help = 'sequence length simulated')
 p.add_argument('-p', '--npops', type = int, default = 1, help = 'number of populations')
 p.add_argument('-u', '--mugen', type = float, default = 1.25e-8, help = 'per-generation mutation rate')
 p.add_argument('-N', '--N0', type = int, default = 1e4, help = 'base effective population size')
@@ -67,6 +33,13 @@ p.add_argument('--eN', help='global Ne history: "time,Ne ..."' )
 p.add_argument('--en', help='population Ne history: "time,pop,Ne ..."' )
 p.add_argument('--ej', help='population merge_history: "time,from_pop,to_pop ..."')
 p.add_argument('--em', help='migration_history: "time,to_pop,from_pop,to_pop_mig_frac ..."')
+p.add_argument('--macs', action='store_true', default = False, help = 'output MaCS command (otherwise use ms)')
+p.add_argument('--recfile', help='MaCS-formatted recombination rate file (enforces --macs, ignores -r)' )
+p.add_argument('--chrmap', help='chromosomal recombination rate file. Sets SEQLEN equal to length of map and writes recfile to CHRMAP.macsrec. (Enforces --macs, ignores -r)' )
+p.add_argument('--mst', type = float, help = 'ms theta value; overrides --mugen if set, otherwise ms_theta = 4 * MUGEN * N0 * SEQLEN (e.g. = 4.8e-4 * SEQLEN for human)')
+p.add_argument('--msr', type = float, help = 'ms rho value; overrides --recgen if set, otherwise ms_rho = 4 * RECGEN * N0 * SEQLEN (e.g. = 4.0e-4 * SEQLEN for human)')
+p.add_argument('--msargs', help = 'ms arguments: "nsamps nreps -t mst [-r msr seqlen] [-I npops pop1_nsamps [pop2_nsamps ...]] <ms_options>" (see MS documentation for more options)')
+p.add_argument('--macsargs', help = 'MaCS arguments: "nsamps seqlen -i nreps -t macst [-r macsr] [-I npops pop1_nsamps [pop2_nsamps ...]] <macs_options>" (see MaCS documentation for more options)')
 p.add_argument('--outfile', action='store_true', default = False, help = 'redirect output to OUTFILE')
 p.add_argument('--prefix', help='output prefix')
 p.add_argument('--suffix', default='mssim', help='output suffix')
@@ -90,19 +63,54 @@ if args.debug:
 	loglevel = logging.DEBUG
 logging.basicConfig(format = '%(module)s:%(lineno)d:%(levelname)s: %(message)s', level = loglevel)
 
+if args.recfile or args.chrmap:
+	args.macs = True
+
+	if args.chrmap:
+		cstart = -1
+		info('reading recombination map file %s' % args.chrmap)
+		if args.chrmap.endswith('.gz'):
+			tok = [line.split() for line in gzip.open(args.chrmap)]
+		else:
+			tok = [line.split() for line in open(args.chrmap)]
+		chrpos = [int(x[0]) for x in tok[1:]]
+		recrate = [x[1] for x in tok[1:]]
+		args.seqlen = chrpos[-1] - chrpos[0] + 1
+		args.recfile = args.chrmap + '.macsrec'
+		info('map length %d' % args.seqlen)
+		info('writing recombination rate file %s' % args.recfile)
+		recfile = open(args.recfile, 'w')
+		for i in range(len(chrpos) - 1):
+			recfile.write('%f\t%f\t%s\n' % (float(chrpos[i] - chrpos[0]) / args.seqlen, float(chrpos[i + 1] - chrpos[0]) / args.seqlen, recrate[i]))
+		recfile.close()
+
 encmd = []
-if not args.mst > 0.0:
+if args.macs:
+	if (args.mst or args.msr or args.msargs or args.mrca):
+		error('cannot combine ms and MaCS arguments')
+
+if not args.mst:
 	args.mst = args.mugen * 4 * args.N0 * args.seqlen
+	args.macst = args.mugen * 4 * args.N0
+	if args.macs:
+		encmd.append('-t %s' % (fnum(args.macst)))
 if args.npops > 1:
 	popsize = args.nsamps/args.npops
 	if not popsize * args.npops == args.nsamps:
 		error('only equal pop sizes supported; nsamps %d not a multiple of npops %d' % (args.nsamps, args.npops))
 	encmd.append('-I %d %s' % (args.npops, ' '.join([str(popsize)] * args.npops)))
-if args.msr > 0.0:
-	encmd.append('-r %s %d' % (fnum(args.msr), seqlen))
-elif args.recgen > 0.0:
-	args.msr = args.recgen * 4 * args.N0 * seqlen
-	encmd.append('-r %s %d' % (fnum(args.msr), seqlen))
+if args.recfile:
+	encmd.append('-R %s' % (args.recfile))
+else:
+	if args.msr:
+		encmd.append('-r %s %d' % (fnum(args.msr), args.seqlen))
+	elif args.recgen > 0.0:
+		args.msr = args.recgen * 4 * args.N0 * args.seqlen
+		args.macsr = args.recgen * 4 * args.N0
+		if args.macs:
+			encmd.append('-r %s' % (fnum(args.macsr)))
+		else:
+			encmd.append('-r %s %d' % (fnum(args.msr), args.seqlen))
 if args.trees:
 	encmd.append('-T')
 if args.mrca:
@@ -182,22 +190,28 @@ if args.unscale_string:
 			print('\tAt %d yrs: migration fraction of population %s from population %s set to %e' % (tj, pop[0], pop[1], mig))
 	sys.exit(0)
 
+if args.macs:
+	if not args.macsargs:
+		args.macsargs = '%d %d' % (args.nsamps, args.seqlen)
 
-if not args.MSARGS:
-	args.MSARGS = '%d %d -t %s' % (args.nsamps, args.nreps, fnum(args.mst))
+	outargs = ' '.join([args.macsargs, ' '.join(encmd)])
+	cmd = ' '.join(['macs', outargs])
+else:
+	if not args.msargs:
+		args.msargs = '%d %d -t %s' % (args.nsamps, args.nreps, fnum(args.mst))
 
-msargs = ' '.join([args.MSARGS, ' '.join(encmd)])
+	outargs = ' '.join([args.msargs, ' '.join(encmd)])
+	cmd = ' '.join(['ms', outargs])
 
 if args.allargs:
-	outname = '_'.join(msargs.split()).replace('_-', '-')
+	outname = '_'.join(outargs.split()).replace('_-', '-')
 else:
-	outname = '_'.join(msargs.split()[2:]).replace('_-', '-')
+	outname = '_'.join(outargs.split()[2:]).replace('_-', '-')
 if args.prefix:
 	outname = args.prefix + '_' + outname
 if args.suffix:
 	outname += '.' + args.suffix
 
-cmd = ' '.join(['ms', msargs])
 
 if args.pipecmds:
 	cmd += ' | ' + args.pipecmds
