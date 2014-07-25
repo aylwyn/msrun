@@ -35,16 +35,18 @@ p.add_argument('--ej', help='population merge_history: "time,from_pop,to_pop ...
 p.add_argument('--em', help='migration_history: "time,to_pop,from_pop,to_pop_mig_frac ..."')
 p.add_argument('--macs', action='store_true', default = False, help = 'output MaCS command (otherwise use ms)')
 p.add_argument('--recfile', help='MaCS-formatted recombination rate file (enforces --macs, ignores -r)' )
-p.add_argument('--chrmap', help='chromosomal recombination rate file. Sets SEQLEN equal to length of map and writes recfile to CHRMAP.macsrec. (Enforces --macs, ignores -r)' )
+p.add_argument('--chrmap', help='chromosomal recombination rate file. Sets SEQLEN equal to length of map and writes recfile to PREFIX.macsrec. (Enforces --macs, ignores -r)' )
 p.add_argument('--mst', type = float, help = 'ms theta value; overrides --mugen if set, otherwise ms_theta = 4 * MUGEN * N0 * SEQLEN (e.g. = 4.8e-4 * SEQLEN for human)')
 p.add_argument('--msr', type = float, help = 'ms rho value; overrides --recgen if set, otherwise ms_rho = 4 * RECGEN * N0 * SEQLEN (e.g. = 4.0e-4 * SEQLEN for human)')
 p.add_argument('--msargs', help = 'ms arguments: "nsamps nreps -t mst [-r msr seqlen] [-I npops pop1_nsamps [pop2_nsamps ...]] <ms_options>" (see MS documentation for more options)')
 p.add_argument('--macsargs', help = 'MaCS arguments: "nsamps seqlen -i nreps -t macst [-r macsr] [-I npops pop1_nsamps [pop2_nsamps ...]] <macs_options>" (see MaCS documentation for more options)')
 p.add_argument('--outfile', action='store_true', default = False, help = 'redirect output to OUTFILE')
-p.add_argument('--prefix', help='output prefix')
-p.add_argument('--suffix', default='mssim', help='output suffix')
+p.add_argument('--prefix', default = 'sim', help='output prefix')
+p.add_argument('--suffix', default='ms', help='output suffix')
+p.add_argument('--encode_pars', action='store_true', default = False, help = 'encode parameters in output file name')
 p.add_argument('--unscale_string', help='print unscaled parameters for simulation output name UNSCALE_STRING')
-p.add_argument('--bsub', action='store_true', default = False, help = 'output bsub.py command')
+p.add_argument('--bsub', action='store_true', default = False, help = 'output submit.py bsub command')
+p.add_argument('--batch', action='store_true', default = False, help = 'output submit.py nohup command')
 p.add_argument('-P', '--pipecmds', help = 'pipe commands')
 p.add_argument('-a', '--allargs', action='store_true', default = False, help = 'encode all arguments in output name')
 p.add_argument('--run', action='store_true', default = False, help = 'run ms command')
@@ -63,6 +65,12 @@ if args.debug:
 	loglevel = logging.DEBUG
 logging.basicConfig(format = '%(module)s:%(lineno)d:%(levelname)s: %(message)s', level = loglevel)
 
+if args.macs:
+	if (args.mst or args.msr or args.msargs or args.mrca):
+		error('cannot combine ms and MaCS arguments')
+	if args.suffix == 'ms':
+		args.suffix = 'macs'
+
 if args.recfile or args.chrmap:
 	args.macs = True
 
@@ -73,22 +81,18 @@ if args.recfile or args.chrmap:
 			tok = [line.split() for line in gzip.open(args.chrmap)]
 		else:
 			tok = [line.split() for line in open(args.chrmap)]
-		chrpos = [int(x[0]) for x in tok[1:]]
+		chrpos = [int(float(x[0])) for x in tok[1:]]
 		recrate = [x[1] for x in tok[1:]]
 		args.seqlen = chrpos[-1] - chrpos[0] + 1
-		args.recfile = args.chrmap + '.macsrec'
+		args.recfile = '.'.join([args.prefix, args.suffix, 'recfile'])
 		info('map length %d' % args.seqlen)
 		info('writing recombination rate file %s' % args.recfile)
 		recfile = open(args.recfile, 'w')
 		for i in range(len(chrpos) - 1):
-			recfile.write('%f\t%f\t%s\n' % (float(chrpos[i] - chrpos[0]) / args.seqlen, float(chrpos[i + 1] - chrpos[0]) / args.seqlen, recrate[i]))
+			recfile.write('%.9f\t%.9f\t%s\n' % (float(chrpos[i] - chrpos[0]) / args.seqlen, float(chrpos[i + 1] - chrpos[0]) / args.seqlen, recrate[i]))
 		recfile.close()
 
 encmd = []
-if args.macs:
-	if (args.mst or args.msr or args.msargs or args.mrca):
-		error('cannot combine ms and MaCS arguments')
-
 if not args.mst:
 	args.mst = args.mugen * 4 * args.N0 * args.seqlen
 	args.macst = args.mugen * 4 * args.N0
@@ -140,6 +144,8 @@ if args.em:
 		encmd.append('-em %s %s %s %s' % (fnum(tev), p1, p2, fnum(mig)))
 
 if args.unscale_string:
+	if not args.unscale_string.endswith('.mssim'):
+		error('--unscale_string currently only works with .mssim files')
 	print('Using mugen = %e per bp per generation, tgen = %.1f y:' % (args.mugen, args.tgen))
 	msargs = {}
 #	for tok in (x.split('_') for x in simname.split('-')[1:]):
@@ -203,23 +209,27 @@ else:
 	outargs = ' '.join([args.msargs, ' '.join(encmd)])
 	cmd = ' '.join(['ms', outargs])
 
-if args.allargs:
-	outname = '_'.join(outargs.split()).replace('_-', '-')
-else:
-	outname = '_'.join(outargs.split()[2:]).replace('_-', '-')
-if args.prefix:
-	outname = args.prefix + '_' + outname
+outname = args.prefix
+if args.encode_pars:
+	if outname:
+		outname += '.'
+	if args.allargs or args.macs:
+		outname += '_'.join(outargs.split()).replace('_-', '-')
+	else:
+		outname += '_'.join(outargs.split()[2:]).replace('_-', '-')
 if args.suffix:
 	outname += '.' + args.suffix
-
 
 if args.pipecmds:
 	cmd += ' | ' + args.pipecmds
 
 if args.bsub:
-	cmd = 'bsub.py \'' + cmd + '\' -M 2 -o %s' % outname
+	cmd = 'submit.py bsub \'' + cmd + '\' -M 2 -o %s -v' % outname
+elif args.batch:
+	cmd = 'submit.py nohup \'' + cmd + '\' -o %s -v' % outname
 elif args.outfile:
-	cmd += ' > ' + outname
+	boutname = outname + '.bout'
+	cmd += ' > %s 2> %s' % (outname, boutname)
 #redirect = '>'
 #if pipecmds:
 #	redirect = ' '.join(['|', pipecmds, redirect])
