@@ -47,6 +47,7 @@ p.add_argument('--encode_pars', action='store_true', default = False, help = 'en
 p.add_argument('--unscale_string', help='print unscaled parameters for simulation output name UNSCALE_STRING')
 p.add_argument('--bsub', action='store_true', default = False, help = 'output submit.py bsub command')
 p.add_argument('--batch', action='store_true', default = False, help = 'output submit.py nohup command')
+p.add_argument('--zipout', action='store_true', default = False, help = 'add zipout flag to submit.py call')
 p.add_argument('-P', '--pipecmds', help = 'pipe commands')
 p.add_argument('-a', '--allargs', action='store_true', default = False, help = 'encode all arguments in output name')
 p.add_argument('--run', action='store_true', default = False, help = 'run ms command')
@@ -93,6 +94,8 @@ if args.recfile or args.chrmap:
 		recfile.close()
 
 encmd = []
+if args.macs and args.nreps:
+	encmd.append('-i %d' % (args.nreps))
 if not args.mst:
 	args.mst = args.mugen * 4 * args.N0 * args.seqlen
 	args.macst = args.mugen * 4 * args.N0
@@ -225,8 +228,12 @@ if args.pipecmds:
 
 if args.bsub:
 	cmd = 'submit.py bsub \'' + cmd + '\' -M 2 -o %s -v' % outname
+	if args.zipout:
+		cmd += ' --zipout'
 elif args.batch:
 	cmd = 'submit.py nohup \'' + cmd + '\' -o %s -v' % outname
+	if args.zipout:
+		cmd += ' --zipout'
 elif args.outfile:
 	boutname = outname + '.bout'
 	cmd += ' > %s 2> %s' % (outname, boutname)
