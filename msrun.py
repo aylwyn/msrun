@@ -24,7 +24,7 @@ p.add_argument('-n', '--nreps', type = int, default = 1, help = 'number of repet
 p.add_argument('-l', '--seqlen', type = int, default = 10000, help = 'sequence length simulated')
 p.add_argument('-p', '--npops', type = int, default = 1, help = 'number of populations')
 p.add_argument('-u', '--mugen', type = float, default = 1.25e-8, help = 'per-generation mutation rate')
-p.add_argument('-N', '--N0', type = int, default = 1e4, help = 'base effective population size')
+p.add_argument('-N', '--N0', type = int, default = 10000, help = 'base effective population size')
 p.add_argument('-r', '--recgen', type = float, default = 0.0, help = 'per-generation recombination rate')
 p.add_argument('-g', '--tgen', type = float, default = 30.0, help = 'generation time (y)')
 p.add_argument('-T', '--trees', action='store_true', default = False, help = 'inlude trees in ms output')
