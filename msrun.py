@@ -34,12 +34,14 @@ p.add_argument('--en', help='population Ne history: "time,pop,Ne ..."' )
 p.add_argument('--ej', help='population merge_history: "time,from_pop,to_pop ..."')
 p.add_argument('--em', help='migration_history: "time,to_pop,from_pop,to_pop_mig_frac ..."')
 p.add_argument('--macs', action='store_true', default = False, help = 'output MaCS command (otherwise use ms)')
+p.add_argument('--scrm', action='store_true', default = False, help = 'output scrm command (otherwise use ms)')
 p.add_argument('--recfile', help='MaCS-formatted recombination rate file (enforces --macs, ignores -r)' )
 p.add_argument('--chrmap', help='chromosomal recombination rate file. Sets SEQLEN equal to length of map and writes recfile to PREFIX.macsrec. (Enforces --macs, ignores -r)' )
 p.add_argument('--mst', type = float, help = 'ms theta value; overrides --mugen if set, otherwise ms_theta = 4 * MUGEN * N0 * SEQLEN (e.g. = 4.8e-4 * SEQLEN for human)')
 p.add_argument('--msr', type = float, help = 'ms rho value; overrides --recgen if set, otherwise ms_rho = 4 * RECGEN * N0 * SEQLEN (e.g. = 4.0e-4 * SEQLEN for human)')
 p.add_argument('--msargs', help = 'ms arguments: "nsamps nreps -t mst [-r msr seqlen] [-I npops pop1_nsamps [pop2_nsamps ...]] <ms_options>" (see MS documentation for more options)')
 p.add_argument('--macsargs', help = 'MaCS arguments: "nsamps seqlen -i nreps -t macst [-r macsr] [-I npops pop1_nsamps [pop2_nsamps ...]] <macs_options>" (see MaCS documentation for more options)')
+p.add_argument('--scrmargs', help = 'scrm arguments: "nsamps nreps -t mst [-r msr seqlen] [-I npops pop1_nsamps [pop2_nsamps ...]] <scrm_options>" (see scrm documentation for more options)')
 p.add_argument('--outfile', action='store_true', default = False, help = 'redirect output to OUTFILE')
 p.add_argument('--prefix', default = 'sim', help='output prefix')
 p.add_argument('--suffix', default='ms', help='output suffix')
@@ -66,11 +68,18 @@ if args.debug:
 	loglevel = logging.DEBUG
 logging.basicConfig(format = '%(module)s:%(lineno)d:%(levelname)s: %(message)s', level = loglevel)
 
-if args.macs:
+if args.scrm:
+	cmdname = 'scrm'
+	if args.suffix == 'ms':
+		args.suffix = 'scrm'
+elif args.macs:
+	cmdname = 'macs'
 	if (args.mst or args.msr or args.msargs or args.mrca):
 		error('cannot combine ms and MaCS arguments')
 	if args.suffix == 'ms':
 		args.suffix = 'macs'
+else:
+	cmdname = 'ms'
 
 if args.recfile or args.chrmap:
 	args.macs = True
@@ -204,13 +213,13 @@ if args.macs:
 		args.macsargs = '%d %d' % (args.nsamps, args.seqlen)
 
 	outargs = ' '.join([args.macsargs, ' '.join(encmd)])
-	cmd = ' '.join(['macs', outargs])
+	cmd = ' '.join([cmdname, outargs])
 else:
 	if not args.msargs:
 		args.msargs = '%d %d -t %s' % (args.nsamps, args.nreps, fnum(args.mst))
 
 	outargs = ' '.join([args.msargs, ' '.join(encmd)])
-	cmd = ' '.join(['ms', outargs])
+	cmd = ' '.join([cmdname, outargs])
 
 outname = args.prefix
 if args.encode_pars:
