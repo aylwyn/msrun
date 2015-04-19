@@ -15,6 +15,7 @@ import locale
 import string
 import decimal
 import argparse
+from numpy import log
 
 import aosutils
 
@@ -159,10 +160,9 @@ for x in args.eNG:
 	tev2 = eval(x[1]) / (4 * args.N0 * args.tgen)
 	Nev1 = float(eval(x[2])) / args.N0
 	Nev2 = float(eval(x[3])) / args.N0
-	alpha = -(1 / (tev2 - tev)) * ln(Nev2 / Nev1)
-	encmd_t.append((tev, '-eN %s %s' % (fnum(tev), fnum(Nev1))))
-	encmd_t.append((tev, '-eG %s %s' % (fnum(tev), fnum(alpha))))
-	encmd_t.append((tev, '-eG %s 0' % (fnum(tev2))))
+	alpha = -(1 / (tev2 - tev)) * log(Nev2 / Nev1)
+	encmd_t.append((tev, '-eN %s %s -eG %s %s' % (fnum(tev), fnum(Nev1), fnum(tev), fnum(alpha))))
+	encmd_t.append((tev2, '-eG %s 0' % (fnum(tev2))))
 for x in args.en:
 	tev = eval(x[0]) / (4 * args.N0 * args.tgen)
 	pnum = int(x[1])
@@ -179,10 +179,9 @@ for x in args.eng:
 	tev2 = eval(x[2]) / (4 * args.N0 * args.tgen)
 	Nev1 = float(eval(x[3])) / args.N0
 	Nev2 = float(eval(x[4])) / args.N0
-	alpha = -(1 / (tev2 - tev)) * ln(Nev2 / Nev1)
-	encmd_t.append((tev, '-en %s %d %s' % (fnum(tev), pnum, fnum(Nev1))))
-	encmd_t.append((tev, '-eg %s %d %s' % (fnum(tev), pnum, fnum(alpha))))
-	encmd_t.append((tev, '-eg %s %d 0' % (fnum(tev2), pnum)))
+	alpha = -(1 / (tev2 - tev)) * log(Nev2 / Nev1)
+	encmd_t.append((tev, '-en %s %d %s -eg %s %d %s' % (fnum(tev), pnum, fnum(Nev1), fnum(tev), pnum, fnum(alpha))))
+	encmd_t.append((tev2, '-eg %s %d 0' % (fnum(tev2), pnum)))
 for x in args.ej:
 	tev = eval(x[0]) / (4 * args.N0 * args.tgen)
 	p1, p2 = x[1:]
@@ -297,7 +296,7 @@ elif args.outfile:
 if args.run:
 #	info('args \'%s\'' % (' '.join(sys.argv[1:])))
 	info('running \'%s\'' % (cmd))
-	subcall(cmd, args.sim, wait = True)
+	aosutils.subcall(cmd, args.sim, wait = True)
 else:
 	print(cmd)
 
