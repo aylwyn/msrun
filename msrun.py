@@ -53,13 +53,13 @@ p.add_argument('--scrmargs', help = 'scrm arguments: "nsamps nreps -t mst [-r ms
 p.add_argument('--outfile', action='store_true', default = False, help = 'redirect output to file')
 p.add_argument('--prefix', default = 'mssim', help='output file prefix')
 p.add_argument('--suffix', default='', help='output file suffix')
-p.add_argument('--encode_pars', action='store_true', default = False, help = 'encode parameters in output file name')
+p.add_argument('--encode_pars', action='store_true', default = False, help = 'encode demographic parameters in output file name (sets --outfile)')
+p.add_argument('--encode_all_args', action='store_true', default = False, help = 'encode all arguments in output file name (sets --outfile)')
 p.add_argument('--unscale_string', help='print unscaled parameters for simulation output name UNSCALE_STRING')
 p.add_argument('--bsub', action='store_true', default = False, help = 'output submit.py bsub command')
 p.add_argument('--batch', action='store_true', default = False, help = 'output submit.py nohup command')
 p.add_argument('--zipout', action='store_true', default = False, help = 'add zipout flag to submit.py call')
 p.add_argument('-P', '--pipecmds', help = 'pipe commands')
-p.add_argument('-a', '--allargs', action='store_true', default = False, help = 'encode all arguments in output name')
 p.add_argument('--sigfigs', type=int, default = 4, help = 'sig figs to use for numbers')
 p.add_argument('--run', action='store_true', default = False, help = 'run ms command')
 p.add_argument('--sim', action='store_true', default = False, help = 'dry run')
@@ -283,7 +283,7 @@ elif args.batch:
 	cmd = 'submit.py nohup \'' + cmd + '\' -o %s -v' % outname
 	if args.zipout:
 		cmd += ' --zipout'
-elif args.outfile:
+elif args.outfile or args.encode_pars:
 	boutname = outname + '.bout'
 	cmd += ' > %s 2> %s' % (outname, boutname)
 #redirect = '>'
