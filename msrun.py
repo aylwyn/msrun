@@ -125,7 +125,8 @@ if not args.mst:
 if args.npops > 1:
 	popsize = args.nsamps/args.npops
 	if not popsize * args.npops == args.nsamps:
-		error('only equal pop sizes supported; nsamps %d not a multiple of npops %d' % (args.nsamps, args.npops))
+		warning('nsamps %d not a multiple of npops %d, setting nsamps = %d' % (args.nsamps, args.npops, popsize * args.npops))
+		args.nsamps = popsize * args.npops
 	encmd.append('-I %d %s' % (args.npops, ' '.join([str(popsize)] * args.npops)))
 if args.recfile:
 	encmd.append('-R %s' % (args.recfile))
