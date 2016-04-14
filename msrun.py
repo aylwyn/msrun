@@ -53,14 +53,14 @@ p.add_argument('--scrmargs', help = 'scrm arguments: "nsamps nreps -t mst [-r ms
 p.add_argument('--outfile', action='store_true', default = False, help = 'redirect output to file')
 p.add_argument('--prefix', default = 'mssim', help='output file prefix')
 p.add_argument('--suffix', default='', help='output file suffix')
-p.add_argument('--encode_pars', action='store_true', default = False, help = 'encode demographic parameters in output file name (sets --outfile)')
-p.add_argument('--encode_all_args', action='store_true', default = False, help = 'encode all arguments in output file name (sets --outfile)')
+p.add_argument('--encode', action='store_true', default = False, help = 'encode demographic parameters in output file name (sets --outfile)')
+p.add_argument('--encode_all', action='store_true', default = False, help = 'encode all arguments in output file name (sets --outfile)')
 p.add_argument('--unscale_string', help='print unscaled parameters for simulation output name UNSCALE_STRING')
 p.add_argument('--bsub', action='store_true', default = False, help = 'output submit.py bsub command')
 p.add_argument('--batch', action='store_true', default = False, help = 'output submit.py nohup command')
 p.add_argument('--zipout', action='store_true', default = False, help = 'add zipout flag to submit.py call')
 p.add_argument('-P', '--pipecmds', help = 'pipe commands')
-p.add_argument('--sigfigs', type=int, default = 4, help = 'sig figs to use for numbers')
+p.add_argument('--sf', type=int, default = 4, help = 'sig figs to use for numbers')
 p.add_argument('--run', action='store_true', default = False, help = 'run ms command')
 p.add_argument('--sim', action='store_true', default = False, help = 'dry run')
 p.add_argument('-v', '--verbose', action='store_true', default = False)#, help = 'dry run')
@@ -70,7 +70,7 @@ p.add_argument('--debug', action='store_true', default = False, help=argparse.SU
 
 args = p.parse_args()
 
-def fnum(x): return aosutils.fnum(x, args.sigfigs)
+def fnum(x): return aosutils.fnum(x, args.sf)
 
 loglevel = logging.WARNING
 if args.verbose:
@@ -125,7 +125,7 @@ if not args.mst:
 if args.npops > 1:
 	popsize = args.nsamps/args.npops
 	if not popsize * args.npops == args.nsamps:
-		warning('nsamps %d not a multiple of npops %d, setting nsamps = %d' % (args.nsamps, args.npops, popsize * args.npops))
+		warning('nsamps %d not a multiple of npops %d; setting nsamps = %d' % (args.nsamps, args.npops, popsize * args.npops))
 		args.nsamps = popsize * args.npops
 	encmd.append('-I %d %s' % (args.npops, ' '.join([str(popsize)] * args.npops)))
 if args.recfile:
@@ -263,10 +263,10 @@ else:
 	cmd = ' '.join([cmdname, outargs])
 
 outname = args.prefix
-if args.encode_pars:
+if args.encode:
 #	if outname:
 #		outname += '.'
-	if args.allargs or args.macs:
+	if args.encode_all or args.macs:
 		outname += '_'.join(outargs.split()).replace('_-', '-')
 	else:
 		outname += '_'.join(outargs.split()[2:]).replace('_-', '-')
@@ -284,7 +284,7 @@ elif args.batch:
 	cmd = 'submit.py nohup \'' + cmd + '\' -o %s -v' % outname
 	if args.zipout:
 		cmd += ' --zipout'
-elif args.outfile or args.encode_pars:
+elif args.outfile or args.encode:
 	boutname = outname + '.bout'
 	cmd += ' > %s 2> %s' % (outname, boutname)
 #redirect = '>'
