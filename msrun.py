@@ -25,10 +25,10 @@ p.add_argument('-s', '--nsamps', type = int, default = 4, help = 'number of samp
 p.add_argument('-n', '--nreps', type = int, default = 1, help = 'number of repetitions (default = 1)')
 p.add_argument('-l', '--seqlen', type = int, default = 10000, help = 'sequence length simulated (default = 10000)')
 p.add_argument('-p', '--npops', type = int, default = 1, help = 'number of populations (default = 1)')
-p.add_argument('-u', '--mugen', type = float, default = 1.25e-8, help = 'per-generation mutation rate (default = 1.25e-8)')
+p.add_argument('-u', '--mugen', type = float, default = 1.45e-8, help = 'per-generation mutation rate (default = 1.25e-8)')
 p.add_argument('-N', '--N0', type = int, default = 10000, help = 'base effective population size (default = 10000)')
 p.add_argument('-r', '--recgen', type = float, default = 0.0, help = 'per-generation recombination rate')
-p.add_argument('-g', '--tgen', type = float, default = 30.0, help = 'generation time (y) (default = 30.0)')
+p.add_argument('-g', '--tgen', type = float, default = 29.0, help = 'generation time (y) (default = 30.0)')
 p.add_argument('-T', '--trees', action='store_true', default = False, help = 'include trees in ms output')
 p.add_argument('--mrca', action='store_true', default = False, help = 'include TMRCA in ms output')
 
@@ -41,9 +41,10 @@ p.add_argument('--eng', action='append', default = [], nargs = 5, help='populati
 p.add_argument('--ej', action='append', default = [], nargs = 3, help='population merge_history', metavar = ('time', 'from_pop', 'to_pop'))
 p.add_argument('--em', action='append', default = [], nargs = 4, help='migration_history', metavar = ('time', 'to_pop', 'from_pop', 'to_pop_mig_frac'))
 
-p.add_argument('--macs', action='store_true', default = False, help = 'output MaCS command (otherwise use ms)')
-p.add_argument('--scrm', action='store_true', default = False, help = 'output scrm command (otherwise use ms)')
-p.add_argument('--recfile', help='MaCS-formatted recombination rate file (enforces --macs, ignores -r)' )
+p.add_argument('--ms', action='store_true', default = True, help = 'output ms command (default)')
+p.add_argument('--macs', action='store_true', default = False, help = 'output MaCS command')
+p.add_argument('--scrm', action='store_true', default = False, help = 'output scrm command')
+p.add_argument('-R', '--recfile', help='MaCS-formatted recombination rate file (enforces --macs, ignores -r)' )
 p.add_argument('--chrmap', help='chromosomal recombination rate file. Sets SEQLEN equal to length of map and writes recfile to PREFIX.macsrec. (Enforces --macs, ignores -r)' )
 p.add_argument('--mst', type = float, help = 'ms theta value; overrides --mugen if set, otherwise ms_theta = 4 * MUGEN * N0 * SEQLEN (e.g. = 4.8e-4 * SEQLEN for human)')
 p.add_argument('--msr', type = float, help = 'ms rho value; overrides --recgen if set, otherwise ms_rho = 4 * RECGEN * N0 * SEQLEN (e.g. = 4.0e-4 * SEQLEN for human)')
@@ -51,10 +52,10 @@ p.add_argument('--msargs', help = 'ms arguments: "nsamps nreps -t mst [-r msr se
 p.add_argument('--macsargs', help = 'MaCS arguments: "nsamps seqlen -i nreps -t macst [-r macsr] [-I npops pop1_nsamps [pop2_nsamps ...]] <macs_options>" (see MaCS documentation for more options)')
 p.add_argument('--scrmargs', help = 'scrm arguments: "nsamps nreps -t mst [-r msr seqlen] [-I npops pop1_nsamps [pop2_nsamps ...]] <scrm_options>" (see scrm documentation for more options)')
 p.add_argument('--outfile', action='store_true', default = False, help = 'redirect output to file')
-p.add_argument('--prefix', default = 'mssim', help='output file prefix')
-p.add_argument('--suffix', default='', help='output file suffix')
+p.add_argument('--prefix', default = '', help='output file prefix')
+p.add_argument('--suffix', default= 'ms', help='output file suffix')
 p.add_argument('--encode', action='store_true', default = False, help = 'encode demographic parameters in output file name (sets --outfile)')
-p.add_argument('--encode_all', action='store_true', default = False, help = 'encode all arguments in output file name (sets --outfile)')
+#p.add_argument('--encode_all', action='store_true', default = False, help = 'encode all arguments in output file name (sets --outfile)')
 p.add_argument('--unscale_string', help='print unscaled parameters for simulation output name UNSCALE_STRING')
 p.add_argument('--bsub', action='store_true', default = False, help = 'output submit.py bsub command')
 p.add_argument('--batch', action='store_true', default = False, help = 'output submit.py nohup command')
@@ -105,7 +106,7 @@ if args.recfile or args.chrmap:
 		chrpos = [int(float(x[0])) for x in tok[1:]]
 		recrate = [x[1] for x in tok[1:]]
 		args.seqlen = chrpos[-1] - chrpos[0] + 1
-		args.recfile = '.'.join([args.prefix, args.suffix, 'recfile'])
+		args.recfile = '.'.join([args.prefix, 'macs_recfile'])
 		info('map length %d' % args.seqlen)
 		info('writing recombination rate file %s' % args.recfile)
 		recfile = open(args.recfile, 'w')
@@ -266,10 +267,10 @@ outname = args.prefix
 if args.encode:
 #	if outname:
 #		outname += '.'
-	if args.encode_all or args.macs:
-		outname += '_'.join(outargs.split()).replace('_-', '-')
-	else:
-		outname += '_'.join(outargs.split()[2:]).replace('_-', '-')
+#	if args.encode_all or args.macs:
+#		outname += '_'.join(outargs.split()).replace('_-', '-')
+#	else:
+	outname += '_'.join(outargs.split()).replace('_-', '-')
 if args.suffix:
 	outname += '.' + args.suffix
 
