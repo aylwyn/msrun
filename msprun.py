@@ -9,12 +9,14 @@ import os.path
 import logging
 from logging import error, warning, info, debug, critical
 import gzip
+from itertools import combinations
 #import locale
 #import string
 #import decimal
 import argparse
 from numpy import log
 
+#sys.path.insert(0, '/home/aos21/msprime')
 import msprime
 
 import aosutils
@@ -22,8 +24,9 @@ import aosutils
 #p = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 p = argparse.ArgumentParser()
 p.add_argument('-n', '--nreps', type = int, default = 1, help = 'number of repetitions (default = 1)')
-p.add_argument('-s', '--nsamps', type = int, default = 4, help = 'number of samples per rep (default = 4)')
-p.add_argument('-p', action = 'append', default = [], nargs = '*', help = 'add present-day population: -p samples [Ne [growth_rate]]; (overrides -s)', metavar = ('samples', 'Ne'))#, 'growth_rate'))
+p.add_argument('-s', '--nsamps', type = int, default = 2, help = 'number of samples per rep (default = 4)')
+p.add_argument('--npops', type = int, default = 1, help = 'number of populations (default = 1)')
+p.add_argument('-p', action = 'append', default = [], nargs = '*', help = 'add present-day population: -p samples [Ne [growth_rate]]; (overrides -s, --npops)', metavar = ('samples', 'Ne'))#, 'growth_rate'))
 p.add_argument('-l', '--seqlen', type = int, default = 10000, help = 'sequence length simulated (default = 10000)')
 p.add_argument('-u', '--mugen', type = float, default = 1.25e-8, help = 'per-generation mutation rate (default = 1.25e-8)')
 p.add_argument('-N', '--N0', type = int, default = 20000, help = 'base effective population size (default = 20000)')
@@ -41,7 +44,7 @@ p.add_argument('--em', action='append', default = [], nargs = 4, help='migration
 p.add_argument('-R', '--recfile', help='HapMap-format recombination rate file (ignores -r)' )
 #p.add_argument('--mst', type = float, help = 'ms theta value; overrides --mugen if set, otherwise ms_theta = 4 * MUGEN * N0 * SEQLEN (e.g. = 4.8e-4 * SEQLEN for human)')
 #p.add_argument('--msr', type = float, help = 'ms rho value; overrides --recgen if set, otherwise ms_rho = 4 * RECGEN * N0 * SEQLEN (e.g. = 4.0e-4 * SEQLEN for human)')
-p.add_argument('--command', action='store_true', default = False, help = 'include command in output')
+p.add_argument('--cmd', action='store_true', default = False, help = 'include command in output')
 #p.add_argument('-T', '--trees', action='store_true', default = False, help = 'include trees in output')
 p.add_argument('--mrca', action='store_true', default = False, help = 'include TMRCA in ms output')
 p.add_argument('--diversity', action='store_true', default = False, help = 'output expected and measured pairwise diversity')
@@ -78,7 +81,15 @@ popconfig = []
 demevents = []
 
 if not args.p:
-	popconfig.append(msprime.PopulationConfiguration(sample_size=args.nsamps, initial_size=args.N0))
+	popsize = args.nsamps/args.npops
+	if not popsize * args.npops == args.nsamps:
+		warning('nsamps %d not a multiple of npops %d; setting nsamps = %d' % (args.nsamps, args.npops, popsize * args.npops))
+		args.nsamps = popsize * args.npops
+	if args.npops > 1:
+		info('distributing %d samples among %d populations' %  (args.nsamps, args.npops))
+	for pop in range(args.npops):
+		popconfig.append(msprime.PopulationConfiguration(sample_size=popsize, initial_size=args.N0))
+		encmd.append('-p %d' % popsize)
 else:
 	for x in args.p:
 		if len(x) == 1:
@@ -91,9 +102,9 @@ else:
 			error('max 3 arguments for -p: samples [initial_Ne [growth_rate]]')
 			sys.exit(1)
 		encmd.append('-p ' + '_'.join(x))
+	args.npops = len(popconfig)
 
-npop = len(popconfig)
-migmatrix = [[0] * npop] * npop
+migmatrix = [[0] * args.npops] * args.npops
 
 if args.recfile:
 	recmap = msprime.RecombinationMap.read_hapmap(args.recfile)
@@ -157,7 +168,6 @@ for x in args.ej:
 
 #outargs = ' '.join([args.msargs, ' '.join(encmd)])
 outargs = ' '.join(encmd)
-
 outname = args.prefix
 if args.encode:
 	outname += '_'.join(outargs.split()).replace('_-', '-')
@@ -166,42 +176,50 @@ if args.suffix:
 
 if args.outfile or args.encode:
 	boutname = outname + '.bout'
-#	cmd += ' > %s 2> %s' % (outname, boutname)
+
+cmd = ' '.join(['msprun.py'] + sys.argv[1:])
 
 if args.demdebug:
 	dp = msprime.DemographyDebugger(Ne=args.N0, population_configurations=popconfig, migration_matrix=migmatrix, demographic_events=demevents)
 	dp.print_history()
-elif not args.sim:
-	info('running \'%s\'' % (outargs))
-	if args.seqlen:
-		if args.recfile:
-			treeseq = msprime.simulate(Ne=args.N0, population_configurations=popconfig, migration_matrix=migmatrix, demographic_events=demevents, mutation_rate=args.mugen, recombination_map=recmap)
+else:
+#	info('running \'%s\'' % (cmd))
+	if not args.sim:
+		if args.seqlen:
+			if args.recfile:
+				ts = msprime.simulate(Ne=args.N0, population_configurations=popconfig, migration_matrix=migmatrix, demographic_events=demevents, mutation_rate=args.mugen, recombination_map=recmap)
+			else:
+				ts = msprime.simulate(Ne=args.N0, population_configurations=popconfig, migration_matrix=migmatrix, demographic_events=demevents, mutation_rate=args.mugen, recombination_rate=args.recgen, length=args.seqlen)
 		else:
-			treeseq = msprime.simulate(Ne=args.N0, population_configurations=popconfig, migration_matrix=migmatrix, demographic_events=demevents, mutation_rate=args.mugen, recombination_rate=args.recgen, length=args.seqlen)
-	else:
-		treeseq = msprime.simulate(Ne=args.N0, population_configurations=popconfig, migration_matrix=migmatrix, demographic_events=demevents)
+			ts = msprime.simulate(Ne=args.N0, population_configurations=popconfig, migration_matrix=migmatrix, demographic_events=demevents)
 
-	if args.command:
-		print(outargs)
+		if args.cmd:
+			sys.stdout.write('CMD\t%s\n' % (cmd))
 
-	if args.mrca:
-		for tree in treeseq.trees():
-			sys.stdout.write('MRCA\t%f\n' % tree.get_time(tree.get_root()) / (4 * args.N0))
+		if args.mrca:
+			for tree in ts.trees():
+				sys.stdout.write('MRCA\t%f\n' % tree.get_time(tree.get_root()) / (4 * args.N0))
 
-	if args.diversity:
-		sys.stdout.write('SEGSITES\t%d\n' % treeseq.get_num_mutations())
-		sys.stdout.write('SEQLEN\t%d\n' % args.seqlen)
-		sys.stdout.write('PI\t%f\n' % (float(treeseq.get_pairwise_diversity())/args.seqlen))
-#		sys.stdout.write('THETA %f\n' % (4 * args.N0 * args.mugen))
+		if args.diversity:
+			sys.stdout.write('SEQLEN\t%d\n' % args.seqlen)
+			sys.stdout.write('PI\t%f\n' % (float(ts.get_pairwise_diversity())/args.seqlen))
+	#		sys.stdout.write('THETA %f\n' % (4 * args.N0 * args.mugen))
+			if args.npops > 1:
+				pi = [0.0] * args.npops
+				for pop in range(args.npops):
+					pi[pop] = float(ts.get_pairwise_diversity(ts.get_samples(pop))) / args.seqlen
+					sys.stdout.write('PI_%d\t%f\n' % (pop, pi[pop]))
+			sys.stdout.write('SEGSITES\t%d\n' % ts.get_num_mutations())
 
-	if args.haplotypes:
-		for ih, hap in enumerate(treeseq.haplotypes()):
-			sys.stdout.write('SAMPLE\t%d\t%s\n' % (ih, hap))
 
-	if args.segsites:
-		alsep = ''
-		for position, variant in treeseq.variants():
-			sys.stdout.write('SITE\t%d\t%s\n' % (position, variant))
-#		hap = list(treeseq.haplotypes())
-#		for im, mutn in enumerate(treeseq.mutations()):
-#			sys.stdout.write('SITE\t%d\t%s\n' % (mutn[0], alsep.join([x[im] for x in hap])))
+		if args.haplotypes:
+			for ih, hap in enumerate(ts.haplotypes()):
+				sys.stdout.write('SAMPLE\t%d\t%s\n' % (ih, hap))
+
+		if args.segsites:
+			alsep = ''
+			for position, variant in ts.variants():
+				sys.stdout.write('SITE\t%d\t%s\n' % (position, variant))
+	#		hap = list(ts.haplotypes())
+	#		for im, mutn in enumerate(ts.mutations()):
+	#			sys.stdout.write('SITE\t%d\t%s\n' % (mutn[0], alsep.join([x[im] for x in hap])))
