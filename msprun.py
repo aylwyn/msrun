@@ -2,7 +2,6 @@
 # Aylwyn Scally 2016
 
 import sys
-#import getopt
 #import subprocess
 import os
 import os.path
@@ -11,7 +10,7 @@ from logging import error, warning, info, debug, critical
 import gzip
 from itertools import combinations
 #import locale
-#import string
+import time
 #import decimal
 import argparse
 from numpy import log
@@ -20,6 +19,9 @@ from numpy import log
 import msprime
 
 import aosutils
+
+start_cpu = time.clock()
+start_real = time.time()
 
 #p = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 p = argparse.ArgumentParser()
@@ -218,8 +220,12 @@ else:
 
 		if args.segsites:
 			alsep = ''
-			for position, variant in ts.variants():
-				sys.stdout.write('SITE\t%d\t%s\n' % (position, variant))
+			for var in ts.variants():
+				sys.stdout.write('SITE\t%d\t%s\n' % (var.position, ''.join([str(x) for x in var.genotypes])))
 	#		hap = list(ts.haplotypes())
 	#		for im, mutn in enumerate(ts.mutations()):
 	#			sys.stdout.write('SITE\t%d\t%s\n' % (mutn[0], alsep.join([x[im] for x in hap])))
+
+		end_cpu = time.clock()
+		end_real = time.time()
+		info('run complete: %f s (%s CPU s)\n' % (end_real - start_real, end_cpu - start_cpu))
